@@ -1,0 +1,29 @@
+cabal-version: 3.0
+name: <project-name>
+version: 0.1.0.0
+synopsis: <project-description>
+description: <project-description>
+license: MIT
+author: <author-name>
+maintainer: <author-email>
+category: <category of the project>
+build-type: Simple
+
+executable <project-name>
+  main-is: Main.hs
+  hs-source-dirs: src
+  build-depends:
+    base,
+    <dependencies>
+
+  default-language: GHC2021
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wmissing-export-lists
+    -Wmissing-home-modules
+    -Wpartial-fields
+    -Wredundant-constraints

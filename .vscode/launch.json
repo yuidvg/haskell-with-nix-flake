@@ -1,0 +1,28 @@
+{
+	// Use IntelliSense to learn about possible attributes.
+	// Hover to view descriptions of existing attributes.
+	// For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"type": "ghc",
+			"request": "launch",
+			"name": "haskell-debug-adapter",
+			"internalConsoleOptions": "openOnSessionStart",
+			"workspace": "${workspaceFolder}",
+			"startup": "${workspaceFolder}/test/Spec.hs",
+			"startupFunc": "",
+			"startupArgs": "",
+			"stopOnEntry": true,
+			"mainArgs": "",
+			"ghciPrompt": "H>>= ",
+			"ghciInitialPrompt": "ghci> ",
+			// The special key "ghci-dap" instructs HDA to use hie-bios to determine the appropriate flags to pass
+			"ghciCmd": "ghci-dap",
+			"ghciEnv": {},
+			"logFile": "${workspaceFolder}/.vscode/phoityne.log",
+			"logLevel": "WARNING",
+			"forceInspect": false
+		}
+	]
+}

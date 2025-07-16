@@ -1,0 +1,133 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+An essential summary of "Test-Driven Development: By Example" by Kent Beck, focusing on its core principles, key examples, and patterns.
+
+### **Core Philosophy: Clean Code That Works**
+
+Test-Driven Development (TDD) is a programming practice that addresses the fear and complexity inherent in software development. Its goal is to produce **clean code that works**. The process is paradoxical: you write a test for code that doesn't exist yet. This forces clarity, encourages simple designs, and provides a safety net for future changes.
+
+The two fundamental rules of TDD are:
+1.  **Write new code only if an automated test has failed.**
+2.  **Eliminate duplication.**
+
+These rules generate a simple, powerful rhythm known as **Red/Green/Refactor**:
+* **Red:** Write a small, failing automated test for a single piece of functionality.
+* **Green:** Write the absolute minimum code required to make that test (and all previous tests) pass. Committing sins (e.g., hard-coding return values) is acceptable here, as the goal is speed.
+* **Refactor:** With the safety of a green bar, clean up the code. Eliminate duplication, improve names, and simplify the design, all while ensuring the tests continue to pass.
+
+TDD is not just a testing technique; it's a discipline for analysis, design, and programming that shortens the feedback loop between decision and consequence.
+
+---
+
+### **Part I: The Money Example (Multi-Currency Arithmetic)**
+
+This section demonstrates TDD by building a system to handle arithmetic with different currencies (e.g., `$5 + 10 CHF`).
+
+#### **Initial To-Do List & First Test**
+The goal is broken down into a to-do list:
+* `$5 * 2 = $10`
+* Handle side effects
+* `5 CHF * 2 = 10 CHF`
+* Implement `equals()`
+* `$5 + 10 CHF = $10` (with a 2:1 exchange rate)
+
+**Cycle 1: Multiplication (`$5 * 2 = $10`)**
+1.  **Red:** A test is written for `Dollar five = new Dollar(5); five.times(2); assertEquals(10, five.amount);`. It fails to compile because `Dollar` doesn't exist.
+2.  **Green:** Stubs are created for the `Dollar` class, constructor, `times` method, and `amount` field. The test still fails (expects 10, gets 0). The "quickest green" is to hard-code the implementation: `amount = 10;`. The test now passes.
+3.  **Refactor:** The duplication between the test data (5, 2) and the hard-coded result (10) is eliminated. The code is generalized step-by-step: `amount = 5 * 2;` -> `amount = amount * 2;` -> `amount = amount * multiplier;`.
+
+#### **Value Objects and Eliminating Side Effects**
+A new test reveals a design flaw: `five.times(2)` changes the state of the `five` object. This is problematic. The solution is to adopt the **Value Object** pattern, where objects are immutable. Operations on a Value Object return a *new* object.
+* **Red:** A test like `Dollar product = five.times(2); assertEquals(10, product.amount); product = five.times(3); assertEquals(15, product.amount);` fails.
+* **Green/Refactor:** The `times` method is changed to `return new Dollar(amount * multiplier);`. This makes `Dollar` objects immutable and eliminates side effects.
+
+#### **Introducing Francs and Removing Duplication**
+* **Red:** To handle francs, a new test `testFrancMultiplication` is created by shamelessly copying and pasting the dollar test.
+* **Green:** The `Franc` class is created by copying and pasting the `Dollar` class. This is a deliberate "sin" to get to green quickly.
+* **Refactor:** Now, the massive duplication between `Dollar` and `Franc` must be removed.
+    * A common superclass, `Money`, is created.
+    * The `amount` field is moved to `Money`.
+    * The `equals()` method is moved up, but requires a check to differentiate `Dollar` from `Franc`. Initially, this is done by comparing classes (`getClass()`).
+    * **Factory Method** (`Money.dollar(5)`, `Money.franc(5)`) is introduced to decouple client code from the concrete `Dollar` and `Franc` subclasses.
+    * A `currency()` method is added (returning "USD" or "CHF"). This allows `equals()` to compare currencies instead of classes, a much better design.
+    * With this, the `Dollar` and `Franc` subclasses become redundant and are eliminated entirely. There is now a single `Money` class.
+
+#### **Handling Mixed-Currency Addition**
+The final, most complex test is `$5 + 10 CHF`.
+* A key design insight emerges: a mixed-currency sum is not a simple `Money` object but an **Expression**. This leads to the **Composite** pattern.
+* `Money` and a new `Sum` class both implement the `Expression` interface.
+* A `Bank` object is introduced to handle conversions (`reduce(expression, currency)`). The bank holds exchange rates.
+* `money.plus(otherMoney)` now returns a `Sum` object.
+* The `bank.reduce()` method can take any `Expression` (a `Money` or a `Sum`) and reduce it to a single `Money` object in a target currency.
+
+The Money example demonstrates how TDD, by focusing on small steps and duplication removal, naturally guides the design toward robust patterns like Value Object, Factory Method, and Composite.
+
+---
+
+### **Part II: The xUnit Example**
+
+This section test-drives the creation of a minimal testing framework in Python, demonstrating how to handle more complex, self-referential logic.
+
+#### **Bootstrapping the Framework**
+The challenge is to test the testing tool itself.
+1.  **To-Do List:** Invoke test method, run `setUp` and `tearDown`, report results, run multiple tests.
+2.  **First Test:** Create a `WasRun` class that logs which methods are called. The initial test manually checks a flag (`wasRun`) before and after calling a method.
+3.  **`run()` Method:** The `run()` method is created to dynamically invoke the test method whose name is passed to the constructor. This uses reflection (`getattr`).
+4.  **Refactoring:** Logic is moved from `WasRun` to a `TestCase` superclass.
+5.  **Automating the Test:** The manual check is replaced with an automated `TestCaseTest`, which uses the framework to test itself.
+
+#### **`setUp`, `tearDown`, and `TestResult`**
+* **`setUp`:** To handle test fixtures (common setup objects), `setUp` is added. The `run` method is modified to call `self.setUp()` before the test method.
+* **`tearDown`:** To clean up resources, `tearDown` is added. `run` is modified to call `self.tearDown()` afterward, even if the test fails (using a `try...finally` block). A log string in `WasRun` confirms the call order: `setUp testMethod tearDown`.
+* **`TestResult`:** To collect results, a `TestResult` object is created. `run` is changed to accept a `TestResult` instance. It calls `result.testStarted()` at the beginning and `result.testFailed()` if an exception occurs. `TestResult` tracks the counts and provides a `summary()` string (e.g., "1 run, 0 failed").
+
+#### **`TestSuite`**
+To run multiple tests, `TestSuite` is created, another example of the **Composite** pattern.
+* It holds a list of tests.
+* Its `run(result)` method iterates through its tests, calling `test.run(result)` on each one, passing along the *same* `TestResult` object.
+* This allows both single `TestCase` objects and `TestSuite` objects to be treated polymorphically.
+
+---
+
+### **Part III: Patterns for TDD**
+
+This section catalogs the techniques and design patterns that emerge from the TDD process.
+
+#### **Red Bar Patterns (Writing Tests)**
+* **Test List:** Before starting, brainstorm a list of all tests needed. This provides focus and a definition of "done."
+* **Starter Test:** Begin with a degenerate case (e.g., adding zero, reducing an empty list). This helps define the operation's interface without worrying about complex logic.
+* **One Step Test:** Pick the next test from the list that teaches you something new and that you are confident you can implement quickly.
+* **Assertion First:** Start writing a test by writing the final `assert` statements. Then work backward to provide the objects and operations needed.
+* **Learning Test:** When using a third-party API for the first time, write a small test to verify your understanding of how it works. This isolates unknowns about external code.
+* **Regression Test:** When a bug is found, write the smallest possible test that reproduces it before fixing the code.
+
+#### **Green Bar Patterns (Making Tests Pass)**
+* **Fake It ('Til You Make It):** Implement a method by returning a hard-coded constant to get the test to pass quickly. Then, refactor by gradually replacing the constant with variables and logic.
+* **Triangulation:** Only generalize code when you have two or more examples. For instance, if `plus(3, 1)` is faked to return 4, add a test for `plus(3, 4)`. Now the implementation cannot be a constant and must be generalized to `augend + addend`.
+* **Obvious Implementation:** If the correct implementation is trivial and you are confident, just type it in. Downshift to smaller steps if you get an unexpected red bar.
+
+#### **xUnit Patterns**
+* **Fixture:** Use `setUp()` to create common objects for a set of tests.
+* **External Fixture:** Use `tearDown()` to release external resources (files, sockets).
+* **Exception Test:** Use a `try...catch` block in a test. Call `fail()` inside the `try` block to ensure that an exception was thrown.
+
+#### **Design Patterns that Emerge from TDD**
+* **Value Object:** Immutable objects that prevent aliasing bugs.
+* **Composite:** Allows single objects and collections of objects to be treated uniformly.
+* **Template Method:** The red/green/refactor cycle itself, and the `setUp`/`test`/`tearDown` sequence, are examples of an invariant process with variable steps.
+* **Factory Method:** Decouples clients from concrete classes, enabling flexibility.
+* **Null Object:** Represents a special or base case with a real object, avoiding `null` checks.
+
+#### **Refactoring**
+* **Reconcile Differences:** When two pieces of code are similar, make them identical step-by-step so one can be removed.
+* **Extract Method:** The primary tool for breaking down long methods and eliminating duplication.
+
+### **Conclusion: Mastering TDD**
+
+TDD is a skill that requires practice. Key questions to consider are:
+* **Step Size:** Your steps should be as small as you need them to be to maintain confidence and momentum. Over time, you learn to take larger, yet still safe, steps.
+* **What Not to Test:** Don't test code you don't write (e.g., standard libraries), unless you need to write a Learning Test to understand its behavior. Test conditionals, loops, and polymorphic operations in your own code.
+* **Why TDD Works:** It works by providing rapid feedback, reducing defect density, managing fear, and forcing a clean, simple, and decoupled design. It replaces speculation with concrete examples, leading to code that is highly adaptable because it was never over-designed.

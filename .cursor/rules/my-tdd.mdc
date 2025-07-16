@@ -1,0 +1,214 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+Here is the canonical Test-Driven Development (TDD) workflow demonstrated in Haskell, managed by a Nix Flake. This approach emphasizes purity, immutability, and conciseness, which are natural fits for both Haskell and the TDD discipline.
+
+### **Project Structure**
+
+A minimal Haskell project for this example would look like this:
+
+```
+.
+├── flake.nix
+├── package.yaml
+├── src
+│ └── Average.hs
+└── test
+    └── Spec.hs
+```
+
+-----
+
+### **0 - Test List**
+
+The behavioral goals remain identical to the C example.
+
+```
+- returns 0.0 for an empty list
+- returns the single value for a singleton list
+- returns the arithmetic mean for multiple values
+```
+
+-----
+
+### **1 & 2 - RED → GREEN (Cycle 1)**
+
+We start by writing a single failing test for the simplest case: an empty list.
+
+#### **RED: The Failing Test**
+
+First, define the test case. We'll use the `hspec` testing framework.
+
+```haskell
+// test/Spec.hs
+import Test.Hspec
+import Average (average)
+
+main :: IO ()
+main = hspec $ do
+  describe "average" $ do
+    it "returns 0.0 for an empty list" $ do
+      average ([] :: [Int]) `shouldBe` 0.0
+```
+
+Attempting to run this test will fail to even compile, as `average` is not yet defined. This is a **Red** state.
+
+#### **GREEN: The Minimal Code to Pass**
+Write the simplest possible function to make the test suite compile and pass.
+
+```haskell
+-- src/Average.hs
+module Average (average) where
+
+average :: [Int] -> Double
+average _ = 0.0
+```
+
+Now, running the test produces a **Green** result. The single test case passes.
+
+-----
+
+### **3 & 4 - REFACTOR & LOOP (Cycle 2)**
+
+No refactoring is needed yet. We loop back to the list and pick the next test: a list with a single element.
+
+#### **RED: Add a New Failing Test**
+
+Extend the `hspec` suite with the next case.
+
+```haskell
+// test/Spec.hs
+-- ... (previous test) ...
+    it "returns the value for a singleton list" $ do
+      average [42] `shouldBe` 42.0
+```
+
+Running the tests now fails. The new test expected `42.0`, but our minimal function returned `0.0`. This is **Red**.
+
+#### **GREEN: Extend the Code**
+
+Modify the production code with the minimum logic to satisfy *all* existing tests. Pattern matching is the idiomatic way to handle this in Haskell.
+
+```haskell
+-- src/Average.hs
+module Average (average) where
+
+average :: [Int] -> Double
+average []    = 0.0
+average [x]   = fromIntegral x -- fromIntegral converts Int to Double
+average _     = 0.0 -- Placeholder for other cases
+```
+
+This passes the first two tests, but it's clearly not the general solution. We are back to **Green**.
+
+-----
+
+### **5 - REFACTOR to the General Solution**
+
+The current implementation is an incomplete kludge. We see the final pattern: `sum / length`. Since the tests provide a safety net, we can refactor confidently to the correct and more general form.
+
+#### **The Refactored Code**
+
+```haskell
+-- src/Average.hs
+module Average (average) where
+
+-- | Calculates the average of a list of integers.
+-- Returns 0.0 for an empty list to avoid division by zero.
+average :: [Int] -> Double
+average xs
+  | null xs   = 0.0
+  | otherwise = fromIntegral (sum xs) / fromIntegral (length xs)
+
+```
+
+This implementation is pure, declarative, and uses standard, highly optimized library functions (`sum`, `length`, `null`). It is the final, correct form.
+
+#### **Add the Final Test**
+
+We add the last test from our list to ensure our refactor was correct.
+
+```haskell
+// test/Spec.hs
+-- ... (previous tests) ...
+    it "returns the arithmetic mean for multiple values" $ do
+      average [1, 2, 6] `shouldBe` 3.0
+```
+
+All tests pass. The list is empty. We are done.
+
+-----
+
+### **Putting It Together with Nix**
+
+A Nix Flake provides a fully reproducible development and testing environment. It ensures that any developer with Nix can build the project and run the tests with the exact same dependencies.
+
+#### **`package.yaml` (Haskell Project Definition)**
+
+This file defines the project metadata and dependencies.
+
+```yaml
+# package.yaml
+name:                average
+version:             0.1.0.0
+
+library:
+  source-dirs: src
+
+tests:
+  average-test:
+    main:                Spec.hs
+    source-dirs:         test
+    dependencies:
+      - average
+      - hspec
+```
+
+#### **`flake.nix` (Reproducible Environment)**
+
+This file defines the entire build and development environment.
+
+```nix
+# flake.nix
+{
+  description = "A Haskell TDD example for calculating an average";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+    haskell-flake.url = "github:srid/haskell-flake";
+  };
+
+  outputs = { self, nixpkgs, flake-utils, haskell-flake }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = nixpkgs.legacyPackages.${system};
+        haskellPackages = pkgs.haskellPackages;
+      in
+      {
+        packages.default = haskell-flake.lib.cabalProject {
+            src = ./.;
+            compiler-nix-name = "ghc96"; # Specify a GHC version
+        };
+
+        devShells.default = haskellPackages.developPackage {
+          root = ./.;
+          modifier = drv: pkgs.haskell.lib.addBuildTools drv [
+            haskellPackages.cabal-install
+            haskellPackages.haskell-language-server
+          ];
+        };
+
+        # This allows running 'nix flake check' to execute tests
+        checks.default = self.packages.${system}.default.checks;
+      });
+}
+```
+
+### **Workflow with Nix**
+
+1.  **Enter Environment:** Run `nix develop` in the terminal. This command creates a shell with GHC, Cabal, and the Haskell Language Server available, all pinned to the versions specified in the flake.
+2.  **Run Tests:** Run `cabal test`.
+3.  **The TDD cycle proceeds as described above, with Nix ensuring the environment is consistent and reproducible.**
